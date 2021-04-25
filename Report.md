@@ -4,6 +4,7 @@
 ------------------
 In this article we will walk you through how to detect memory leaks in your web application and how to investigate the reasons behind those memory leaks and solve them using a real world example. We will have a journey together to get from **snapshot 1** to **snapshot 2**.
 
+**Note**: In this article we are using **Ionic v5** and **Angular v9.1.12**.
 ![](./images/before.png)
 
 ![](./images/after.png)
@@ -33,7 +34,7 @@ Chrome DevTools have two very helpful memory debugging tools to monitory memory 
 **1.** Performance Monitor   
 **2.** Record Memory Allocation Timeline Heap Snapshot  
 
-Let's start with the performance montitor.
+Let's start with the performance monitor.
 
 ##### Performance monitor
 If we open the performance monitor it starts recording the heap size throughout the session. We can see in the graph below that it has the shape of a **sawtooth**, the heap size is getting bigger over time and that indicates that there are some memory allocations that have not been garbage collected.
@@ -53,7 +54,7 @@ In the memory allocation timeline below those blue bars represent new memory all
 ![allocation-timeline-gif.gif](./images/allocation-timeline-gif.gif)
 
 
- Before we dive into finding the reason for the memory leaks, let's talk briefly about how garbage collection works in JavaScript. In Javascript resources get garbage collected when there are no references to it. That means that even if an object is not needed anymore but still referenced and accessible from another place in our application, it will not be garbage collected. This issue can't be handled by the garbage collector, it's up to the developer to clean up the refernces to the objects.
+ Before we dive into finding the reason for the memory leaks, let's talk briefly about how garbage collection works in JavaScript. In Javascript resources get garbage collected when there are no references to it. That means that even if an object is not needed anymore but still referenced and accessible from another place in our application, it will not be garbage collected. This issue can't be handled by the garbage collector, it's up to the developer to clean up the references to the objects.
  
  
 #### Step 2: Investigating The Reasons For Memory Leaks
@@ -64,7 +65,9 @@ If we filter the objects by name we will find that we have 3x **SupplierProducts
 
 ![before-angular-9.png](./images/before-angular-9.png)
 
-If you click on an object you will find a window get shown called **object's retaining tree**. this tree shows us the objects that have reference to the selected object.After going through the object's retaining tree of  **SupplierProductsPage** object and **SupplierProductCard** object we found that there are subscriptions to observables that are still alive and causing the memory leaks.
+If you click on an object you will find a window get shown called **object's retaining tree**. This tree shows us the objects that have reference to the selected object. After going through the object's retaining tree of  **SupplierProductsPage** object and **SupplierProductCard** object we found that there are subscriptions to RxJS **Observables** that are still alive and causing the memory leaks.
+
+RxJS is a library for composing asynchronous and event-based programs by using observable sequences. It combines the Observer pattern with the Iterator pattern and functional programming with collections to fill the need for an ideal way of managing sequences of events [<sup>2</sup>](https://rxjs-dev.firebaseapp.com/guide/overview). 
 
 ![subscriptions.png](./images/subscriptions.png)
 
@@ -72,8 +75,8 @@ If you click on an object you will find a window get shown called **object's ret
 
 In RxJS it is very important to remember to unsubscribe from an observable for two reasons:
 
-**1.** A subscription has a reference to the component they're created in. So, when the component gets destroyed it will not be garbage collected and that will result in a memory leak.  
-**2.** The code will continue to execute in the backgorund even if the component gets destroyed, and that can result to unpredictable erros and side effects.  
+**1.** A subscription has a reference to the component they are created in. So, when the component gets destroyed it will not be garbage collected and that will result in a memory leak.  
+**2.** The code will continue to execute in the background even if the component gets destroyed, and that can result to unpredictable errors and side effects.  
 
 The solution to this issue is quite simple yet can go unnoticed very easily. We need to hook into `ngOnDestroy` component lifecycle to clean up our subscriptions in both components before the component gets destroyed.
 
@@ -89,7 +92,7 @@ In the heap snapshot below we can see that the **LEmbeddedView_** and **LCompone
 ![before-supplier-objects-count.png](./images/before-supplier-objects-count.png)
 
 ##### Result Of Unsubscribing From Observables
-The subscriptions have been cleaned up, however after taking a new record for the memory allocation timeline the object's didn't get garbage collected.
+The subscriptions have been cleaned up, however after taking a new record for the memory allocation timeline the object's did not get garbage collected.
 ![nothing.png](./images/nothing.png)
 
 To find the reason why the objects didn't get garbage collected event after unsubscribing it took some time, because I found that the problem was not in our implementation but it's a bug in an **Ionic** component which is `ion-img`, this component lazily loads images.
